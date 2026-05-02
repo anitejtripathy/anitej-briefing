@@ -22,6 +22,16 @@ def test_parse_plain_email_address():
     assert result["sender"] == "boss@company.com"
     assert result["sender_email"] == "boss@company.com"
 
+def test_parse_missing_from_header_returns_defaults():
+    headers = [
+        {"name": "Subject", "value": "No sender"},
+        {"name": "Date", "value": "Thu, 30 Apr 2026 09:00:00 +0000"},
+    ]
+    result = parse_email_headers(headers)
+    assert result["sender"] == ""
+    assert result["sender_email"] == ""
+    assert result["subject"] == "No sender"
+
 def test_client_accepts_injected_service():
     mock_service = MagicMock()
     client = GmailClient(service=mock_service)

@@ -15,7 +15,7 @@ _FROM_RE = re.compile(r"^(.+?)\s*<(.+?)>$")
 
 
 def parse_email_headers(headers: list[dict]) -> dict:
-    result = {}
+    result = {"sender": "", "sender_email": "", "subject": "", "raw_date": ""}
     for h in headers:
         if h["name"] == "From":
             m = _FROM_RE.match(h["value"])
@@ -38,8 +38,17 @@ def get_credentials(credentials_path: Path, token_path: Path) -> Credentials:
         creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except Exception:
+                # Token refresh failed (revoked, network error) — re-run OAuth flow
+                creds = None
+        if not creds or not creds.valid:
+            if not credentials_path.exists():
+                raise FileNotFoundError(
+                    f"credentials.json not found at {credentials_path}. "
+                    "Download it from Google Cloud Console → APIs & Services → Credentials."
+                )
             flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
             creds = flow.run_local_server(port=0)
         token_path.write_text(creds.to_json())
@@ -59,7 +68,8 @@ class GmailClient:
         query = f"after:{after} before:{before}"
         threads, page_token = [], None
         while True:
-            kwargs = {"userId": "me", "q": query, "maxResults": min(max_results, 100)}
+            remaining = max_results - len(threads)
+            kwargs = {"userId": "me", "q": query, "maxResults": min(remaining, 100)}
             if page_token:
                 kwargs["pageToken"] = page_token
             resp = self.service.users().threads().list(**kwargs).execute()
