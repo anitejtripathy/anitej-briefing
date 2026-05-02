@@ -1,9 +1,10 @@
-import json
+# ~/anitej-briefing/tests/conftest.py
 import pytest
 
 
 @pytest.fixture
 def vip_emails():
+    """Synthetic VIP email set for unit tests. Does not reflect production config."""
     return {"boss@company.com"}
 
 
