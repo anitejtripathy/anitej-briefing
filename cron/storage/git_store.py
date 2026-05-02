@@ -19,7 +19,10 @@ class GitStore:
         full_path = self.data_path / relative_path
         if not full_path.exists():
             return []
-        return json.loads(full_path.read_text())
+        try:
+            return json.loads(full_path.read_text())
+        except json.JSONDecodeError:
+            return []
 
     def append_to_json(self, relative_path: str, item: dict) -> None:
         existing = self.read_json(relative_path)
@@ -29,12 +32,14 @@ class GitStore:
         self.write_json(relative_path, existing)
 
     def commit(self, message: str, relative_paths: list[str]) -> None:
-        abs_paths = [str(self.data_path / p) for p in relative_paths]
-        self.repo.index.add(abs_paths)
+        # gitpython index.add expects paths relative to repo root, not absolute
+        repo_relative = [str(Path("data") / p) for p in relative_paths]
+        self.repo.index.add(repo_relative)
         if self.repo.is_dirty(index=True, working_tree=False):
             self.repo.index.commit(message)
 
     def commit_and_push(self, message: str, relative_paths: list[str]) -> None:
         self.commit(message, relative_paths)
-        if self.repo.remotes:
+        remote_names = [r.name for r in self.repo.remotes]
+        if "origin" in remote_names:
             self.repo.remotes.origin.push()
