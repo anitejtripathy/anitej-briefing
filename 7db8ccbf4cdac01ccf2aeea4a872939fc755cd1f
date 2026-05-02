@@ -1,0 +1,4 @@
+requirements.txt
+  c838234a-4336-4c68-96a7-099880da9db7:2026-05-02T15:37:45.823Z 10-13
+---
+{"schema_version": "authorship/3.0.0", "base_commit_sha": "HEAD~1", "prompts": {"c838234a-4336-4c68-96a7-099880da9db7:2026-05-02T15:37:45.823Z": {"agent_id": {"tool": "claude_code", "model": ""}, "human_author": "anitej.tripathy@razorpay.com", "accepted_lines": 4, "overriden_lines": 0}}}
