@@ -44,6 +44,8 @@ export async function fetchTasks() {
 // Update a single task field and commit
 export async function patchTask(taskId, patch) {
   const { data: tasks } = await readJson('tasks/tasks.json')
+  const target = tasks.find(t => t.id === taskId)
+  if (!target) throw new Error(`Task not found: ${taskId}`)
   const updated = tasks.map(t => t.id === taskId ? { ...t, ...patch } : t)
   await writeJson('tasks/tasks.json', updated, `chore(tasks): update ${taskId}`)
   return updated.find(t => t.id === taskId)
@@ -72,6 +74,7 @@ export async function createTask(text) {
 
 // Swap priorities of two tasks (for reordering)
 export async function swapTaskPriorities(idA, idB) {
+  if (idA === idB) return  // no-op, skip the write
   const { data: tasks } = await readJson('tasks/tasks.json')
   const taskA = tasks.find(t => t.id === idA)
   const taskB = tasks.find(t => t.id === idB)
