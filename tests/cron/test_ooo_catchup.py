@@ -20,6 +20,16 @@ def test_build_email_record_defaults():
     assert result["ai_summary"] == ""
     assert "2026-04-30" in result["received_at"]
 
+def test_build_email_record_bad_raw_date_falls_back_to_empty():
+    raw = {
+        "id": "t2", "source": "email", "sender": "Test",
+        "sender_email": "test@test.com", "subject": "Hi",
+        "snippet": "", "label_ids": [], "thread_url": "", "read": False,
+        "raw_date": "not a real date",
+    }
+    result = build_email_record(raw, is_vip=False)
+    assert result["received_at"] == ""
+
 def test_process_day_writes_json():
     mock_gmail = MagicMock()
     mock_gmail.fetch_threads.return_value = []

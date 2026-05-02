@@ -39,10 +39,8 @@ def process_day(day: date, gmail_client, store, vip_emails: set) -> int:
     before = (day + timedelta(days=1)).strftime("%Y/%m/%d")
     raw = gmail_client.fetch_threads(after=after, before=before)
     filtered = apply_stage1_filter(raw, vip_emails)
-    records = [
-        build_email_record(t, t.get("sender_email", "").lower() in {v.lower() for v in vip_emails})
-        for t in filtered
-    ]
+    vip_lower = {v.lower() for v in vip_emails}
+    records = [build_email_record(t, t.get("sender_email", "").lower() in vip_lower) for t in filtered]
     store.write_json(f"inbox/emails-{day.isoformat()}.json", records)
     return len(records)
 
