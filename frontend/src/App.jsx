@@ -16,7 +16,10 @@ export default function App() {
   return (
     <QueryClientProvider client={qc}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <div style={{ display: 'flex', minHeight: '100vh', overflow: 'hidden', position: 'relative' }}>
+        <div style={{
+          display: 'flex', height: '100dvh', /* dynamic viewport height — fixes iOS safari */
+          overflow: 'hidden', position: 'relative',
+        }}>
           <Sidebar />
           <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
             <Routes>
