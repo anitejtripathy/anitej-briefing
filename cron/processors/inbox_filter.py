@@ -14,9 +14,9 @@ def is_automated_sender(sender_email: str) -> bool:
 
 
 def passes_stage1_filter(email: dict, vip_emails: set[str]) -> bool:
-    sender = email.get("sender_email", "")
+    sender = email.get("sender_email", "").lower()
     labels = email.get("label_ids", [])
-    if sender in vip_emails:
+    if sender in {v.lower() for v in vip_emails}:
         return True
     if is_automated_sender(sender):
         return False

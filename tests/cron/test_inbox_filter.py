@@ -23,6 +23,10 @@ def test_is_automated_sender():
     assert is_automated_sender("alerts@monitoring.com") is True
     assert is_automated_sender("anitej@razorpay.com") is False
 
+def test_vip_case_insensitive():
+    vip = {"Boss@Company.com"}
+    assert passes_stage1_filter({"sender_email": "boss@company.com", "label_ids": ["INBOX"]}, vip) is True
+
 def test_apply_stage1_filter_returns_subset():
     emails = [
         {"sender_email": "peer@razorpay.com", "label_ids": ["INBOX"]},
