@@ -88,3 +88,70 @@ export async function swapTaskPriorities(idA, idB) {
   })
   await writeJson('tasks/tasks.json', updated, `chore(tasks): reorder ${idA} ↔ ${idB}`)
 }
+
+// Fetch classified inbox items from the last N days, merged + sorted newest first
+export async function fetchInbox(days = 3) {
+  const results = []
+  const today = new Date()
+
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
+
+    const [emails, slack, devrev] = await Promise.all([
+      readJson(`inbox/emails-${dateStr}.json`).catch(() => ({ data: [] })),
+      readJson(`inbox/slack-${dateStr}.json`).catch(() => ({ data: [] })),
+      readJson(`inbox/devrev-${dateStr}.json`).catch(() => ({ data: [] })),
+    ])
+
+    results.push(
+      ...(Array.isArray(emails.data) ? emails.data : []),
+      ...(Array.isArray(slack.data) ? slack.data : []),
+      ...(Array.isArray(devrev.data) ? devrev.data : []),
+    )
+  }
+
+  return results
+    .filter(item => item.bucket !== 'noise' && item.bucket !== 'unclassified')
+    .sort((a, b) => new Date(b.received_at) - new Date(a.received_at))
+}
+
+// Fetch morning brief markdown for a given date (defaults to today)
+export async function fetchBrief(dateStr = null) {
+  const d    = dateStr || new Date().toISOString().split('T')[0]
+  const REPO = import.meta.env.VITE_GITHUB_DATA_REPO
+  const PAT  = import.meta.env.VITE_GITHUB_PAT
+  const res  = await fetch(
+    `https://api.github.com/repos/${REPO}/contents/data/briefs/${d}.md`,
+    { headers: { Authorization: `token ${PAT}`, Accept: 'application/vnd.github.v3+json' } }
+  )
+  if (res.status === 404) return { markdown: null, date: d }
+  if (!res.ok) throw new Error(`Brief fetch error: ${res.status}`)
+  const json     = await res.json()
+  const markdown = atob(json.content.replace(/\n/g, ''))
+  return { markdown, date: d }
+}
+
+// Add a task from an inbox item
+export async function createTaskFromInboxItem(item, text) {
+  const { data: tasks } = await readJson('tasks/tasks.json')
+  const open = tasks.filter(t => t.status === 'open')
+  const maxPriority = open.length ? Math.max(...open.map(t => t.priority)) : 0
+  const newTask = {
+    id: crypto.randomUUID(),
+    text,
+    source: item.source,
+    source_ref: item.id,
+    priority: item.is_vip ? Math.min(maxPriority + 1, 2) : maxPriority + 1,
+    status: 'open',
+    category: null,
+    due: null,
+    due_time: null,
+    snooze_until: null,
+    created_at: new Date().toISOString(),
+    completed_at: null,
+  }
+  await writeJson('tasks/tasks.json', [...tasks, newTask], `chore(tasks): add task from ${item.source}`)
+  return newTask
+}
