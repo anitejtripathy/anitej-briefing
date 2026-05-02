@@ -26,7 +26,7 @@ function Toast({ message, type, onDismiss }) {
   )
 }
 
-export default function Tasks() {
+export default function Tasks({ onMenuClick }) {
   const [newText, setNewText] = useState('')
   const [toast, setToast] = useState(null)
   const qc = useQueryClient()
@@ -93,7 +93,7 @@ export default function Tasks() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <Topbar title="Tasks" subtitle={`${open.length} open · ${done.length} done`}>
+      <Topbar title="Tasks" subtitle={`${open.length} open · ${done.length} done`} onMenuClick={onMenuClick}>
         {isMutating && (
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10, color: '#4F8EF7', display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#4F8EF7', animation: 'pulse 1s ease-in-out infinite' }} />

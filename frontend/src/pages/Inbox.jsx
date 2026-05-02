@@ -1,9 +1,9 @@
 // frontend/src/pages/Inbox.jsx
 import Topbar from '../components/Topbar'
-export default function Inbox() {
+export default function Inbox({ onMenuClick }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <Topbar title="Inbox" subtitle="Email · Slack · DevRev — Phase 2" />
+      <Topbar title="Inbox" subtitle="Email · Slack · DevRev — Phase 2" onMenuClick={onMenuClick} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, paddingBottom: 64 }}>
         <span style={{ fontSize: 48, opacity: 0.2 }}>📬</span>
         <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, color: '#3D4152', margin: 0 }}>Inbox</p>
