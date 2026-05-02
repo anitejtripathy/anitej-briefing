@@ -2,7 +2,7 @@
 
 install:
 	python -m venv venv && . venv/bin/activate && pip install -r requirements.txt
-	cd frontend && npm install
+	@[ -f frontend/package.json ] && (cd frontend && npm install) || echo "frontend not yet scaffolded — skipping npm install"
 
 run-frontend:
 	cd frontend && npm run dev

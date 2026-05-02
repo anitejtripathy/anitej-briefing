@@ -1,3 +1,5 @@
+# Tested on Python 3.14. Plan specifies 3.11 but 3.11 is not available on this machine.
+# All packages install cleanly; monitor for any 3.14 compatibility issues.
 gitpython==3.1.43
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
