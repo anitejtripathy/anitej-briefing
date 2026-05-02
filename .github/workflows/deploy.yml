@@ -1,0 +1,72 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Rebuild hourly 7 AM–9 PM IST (1:30 AM–3:30 PM UTC), weekdays
+    # IST = UTC+5:30
+    - cron: '30 1 * * 1-5'
+    - cron: '30 2 * * 1-5'
+    - cron: '30 3 * * 1-5'
+    - cron: '30 4 * * 1-5'
+    - cron: '30 5 * * 1-5'
+    - cron: '30 6 * * 1-5'
+    - cron: '30 7 * * 1-5'
+    - cron: '30 8 * * 1-5'
+    - cron: '30 9 * * 1-5'
+    - cron: '30 10 * * 1-5'
+    - cron: '30 11 * * 1-5'
+    - cron: '30 12 * * 1-5'
+    - cron: '30 13 * * 1-5'
+    - cron: '30 14 * * 1-5'
+    - cron: '30 15 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      - name: Build
+        run: cd frontend && npm run build
+        env:
+          VITE_GITHUB_PAT: ${{ secrets.VITE_GITHUB_PAT }}
+          VITE_GITHUB_DATA_REPO: ${{ secrets.VITE_GITHUB_DATA_REPO }}
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
