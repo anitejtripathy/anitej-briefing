@@ -59,6 +59,9 @@ jobs:
           VITE_GITHUB_PAT: ${{ secrets.VITE_GITHUB_PAT }}
           VITE_GITHUB_DATA_REPO: ${{ secrets.VITE_GITHUB_DATA_REPO }}
 
+      - name: Create 404 fallback for React Router
+        run: cp frontend/dist/index.html frontend/dist/404.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
