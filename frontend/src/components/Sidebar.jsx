@@ -1,5 +1,45 @@
 // frontend/src/components/Sidebar.jsx
 import { NavLink } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { fetchLastSync } from '../lib/github'
+
+function SyncStatus() {
+  const { data: sync } = useQuery({
+    queryKey: ['last_sync'],
+    queryFn: fetchLastSync,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+
+  const label = (() => {
+    if (!sync?.timestamp) return 'Not yet synced'
+    const d = sync.timestamp
+    const now = new Date()
+    const diffMin = Math.round((now - d) / 60000)
+    if (diffMin < 1) return 'Just now'
+    if (diffMin < 60) return `${diffMin}m ago`
+    if (diffMin < 1440) {
+      const h = Math.floor(diffMin / 60)
+      const m = diffMin % 60
+      return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`
+    }
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  })()
+
+  const sourcesLabel = sync?.sources?.length
+    ? sync.sources.join(' + ')
+    : 'email + slack'
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 16px', padding: '6px 10px', background: '#0E1016', border: '1px solid #1C1F2E', borderRadius: 6 }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', display: 'inline-block', flexShrink: 0 }} />
+      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 9, color: '#3D4152', lineHeight: 1.4 }}>
+        <strong style={{ color: '#10B981' }}>{label}</strong>
+        <span style={{ display: 'block', color: '#3D4152', fontSize: 8, marginTop: 1 }}>{sourcesLabel}</span>
+      </div>
+    </div>
+  )
+}
 
 const NAV = [
   { to: '/',         icon: '🌅', label: 'Morning Brief',    section: 'Today' },
@@ -73,12 +113,7 @@ export default function Sidebar({ open, onClose }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 16px', padding: '6px 10px', background: '#0E1016', border: '1px solid #1C1F2E', borderRadius: 6 }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
-          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 9, color: '#3D4152' }}>
-            Last synced <strong style={{ color: '#10B981' }}>7:00 AM</strong>
-          </span>
-        </div>
+        <SyncStatus />
 
         <nav style={{ flex: 1, padding: '8px 10px', overflowY: 'auto' }}>
           {NAV.map(item => (

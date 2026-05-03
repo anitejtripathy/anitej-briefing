@@ -157,3 +157,25 @@ export async function createTaskFromInboxItem(item, text) {
   await writeJson('tasks/tasks.json', [...tasks, newTask], `chore(tasks): add task from ${item.source}`)
   return newTask
 }
+
+// Fetch last sync timestamp from meta/last_sync.json
+export async function fetchLastSync() {
+  const { data } = await readJson('meta/last_sync.json').catch(() => ({ data: null }))
+  if (!data || !data.timestamp) return null
+  return {
+    timestamp: new Date(data.timestamp),
+    sources: data.sources || [],
+    items_found: data.items_found || 0,
+  }
+}
+
+// Write last sync timestamp after a /scan run
+export async function writeLastSync(sources = [], items_found = 0) {
+  const payload = {
+    timestamp: new Date().toISOString(),
+    sources,
+    items_found,
+  }
+  await writeJson('meta/last_sync.json', payload, 'chore(meta): update last_sync timestamp')
+  return payload
+}
