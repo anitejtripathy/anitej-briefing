@@ -1,12 +1,15 @@
 // frontend/src/pages/Inbox.jsx
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchInbox, createTaskFromInboxItem } from '../lib/github'
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { fetchInbox, fetchInboxOverrides, patchInboxOverrides, createTaskFromInboxItem } from '../lib/github'
 import Topbar from '../components/Topbar'
 
 // ── CACHE & SEEN (localStorage) ────────────────────────
-const CACHE_KEY = 'inbox_cache_v1'
-const SEEN_KEY  = 'inbox_seen_v1'
+const CACHE_KEY = 'inbox_cache_v2'   // bumped — clears fake seeded data
+const SEEN_KEY  = 'inbox_seen_v2'   // bumped — resets all accidentally-marked items
 
 function readCache()  { try { const r = localStorage.getItem(CACHE_KEY); return r ? JSON.parse(r) : null } catch { return null } }
 function writeCache(data) { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, fetched_at: new Date().toISOString() })) } catch {} }
@@ -48,6 +51,12 @@ const SOURCE_META = {
   slack:  { label: '💬 Slack',  color: C.purple, bg: 'rgba(167,139,250,0.1)' },
   devrev: { label: '🎯 DevRev', color: C.amber,  bg: 'rgba(245,166,35,0.1)'  },
 }
+const BUCKET_META = {
+  needs_action: { label: '🔴 Action needed', color: C.red   },
+  fyi:          { label: '🔵 FYI',           color: C.blue  },
+  noise:        { label: '⬜ Dismiss',        color: C.muted },
+}
+const itemKey = item => `${item.source}_${item.id}`
 
 // ── SUB-ITEM ───────────────────────────────────────────
 function SubItem({ text, snippet }) {
@@ -62,7 +71,7 @@ function SubItem({ text, snippet }) {
 }
 
 // ── INBOX ITEM ─────────────────────────────────────────
-function InboxItem({ item, onAddTask, onAddTaskAndSeen, onMarkSeen }) {
+function InboxItem({ item, onAddTask, onAddTaskAndSeen, onMarkSeen, onRelabel, dragHandleProps = {}, isDragging }) {
   const [expanded, setExpanded] = useState(false)
   const [taskText, setTaskText] = useState(item.task_text || '')
   const [showTask, setShowTask] = useState(false)
@@ -85,11 +94,23 @@ function InboxItem({ item, onAddTask, onAddTaskAndSeen, onMarkSeen }) {
       border: `1px solid ${item.is_vip ? C.amber+'60' : isAction ? C.red+'40' : C.border}`,
       borderLeft: `3px solid ${item.is_vip ? C.amber : isAction ? C.red : C.border}`,
       borderRadius: 10, marginBottom: 8, overflow: 'hidden',
+      opacity: isDragging ? 0.4 : 1,
     }}>
       {/* Header */}
-      <div style={{ padding: '11px 12px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 8 }}
-        onClick={() => setExpanded(!expanded)}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ padding: '11px 12px', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+
+        {/* Drag handle */}
+        <div
+          {...dragHandleProps}
+          style={{
+            flexShrink: 0, cursor: 'grab', touchAction: 'none',
+            color: C.border2, fontSize: 18, lineHeight: 1,
+            paddingTop: 2, userSelect: 'none', display: 'flex', alignItems: 'flex-start',
+          }}
+        >⠿</div>
+
+        {/* Main content — tap to expand */}
+        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
             {item.is_vip && <span style={{ fontFamily: MONO, fontSize: 9, color: C.amber, background: 'rgba(245,166,35,0.15)', border: `1px solid ${C.amber}40`, padding: '1px 6px', borderRadius: 4 }}>★ VIP</span>}
             <span style={{ fontFamily: SANS, fontSize: isMobile ? 14 : 13, fontWeight: 600, color: C.primary }}>{item.sender}</span>
@@ -105,12 +126,25 @@ function InboxItem({ item, onAddTask, onAddTaskAndSeen, onMarkSeen }) {
             {item.ai_summary || item.snippet}
           </p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+
+        {/* Timestamp + seen button */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
           <span style={{ fontFamily: MONO, fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>{timeLabel(item.received_at)}</span>
-          <button onClick={e => { e.stopPropagation(); onMarkSeen(item.id) }}
-            title="Mark as seen"
-            style={{ fontFamily: MONO, fontSize: 9, padding: '2px 7px', borderRadius: 4, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', lineHeight: 1 }}>
-            👁
+          <button
+            onClick={e => { e.stopPropagation(); onMarkSeen(item.id) }}
+            title="Mark as seen — moves to Actioned section"
+            style={{
+              minWidth: 44, minHeight: 34,   /* large enough tap target */
+              fontFamily: SANS, fontSize: 12, fontWeight: 600,
+              padding: '4px 10px', borderRadius: 6,
+              border: `1px solid ${C.border2}`,
+              background: C.surface2, color: C.secondary,
+              cursor: 'pointer', lineHeight: 1,
+              display: 'flex', alignItems: 'center', gap: 4,
+              transition: 'all 0.12s',
+            }}
+          >
+            👁 <span style={{ fontFamily: MONO, fontSize: 9 }}>Done</span>
           </button>
         </div>
       </div>
@@ -121,6 +155,28 @@ function InboxItem({ item, onAddTask, onAddTaskAndSeen, onMarkSeen }) {
       {/* Expanded */}
       {expanded && (
         <div style={{ borderTop: `1px solid ${C.border}`, padding: '12px 14px' }}>
+
+          {/* Label picker — first thing visible on expand */}
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ fontFamily: MONO, fontSize: 9, color: C.muted, margin: '0 0 7px', textTransform: 'uppercase', letterSpacing: 1 }}>Label</p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {Object.entries(BUCKET_META).map(([b, m]) => {
+                const active = item.bucket === b
+                return (
+                  <button key={b} onClick={() => !active && onRelabel(b)} disabled={active} style={{
+                    fontFamily: MONO, fontSize: 10, padding: '6px 12px', borderRadius: 7, minHeight: 34,
+                    background: active ? m.color + '22' : C.surface2,
+                    border: `1.5px solid ${active ? m.color + '70' : C.border}`,
+                    color: active ? m.color : C.secondary,
+                    cursor: active ? 'default' : 'pointer',
+                    fontWeight: active ? 700 : 400,
+                    transition: 'all 0.12s',
+                  }}>{m.label}</button>
+                )
+              })}
+            </div>
+          </div>
+
           {item.ai_summary && (
             <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderLeft: `2px solid ${C.purple}`, borderRadius: 7, padding: '8px 12px', marginBottom: 12 }}>
               <p style={{ fontFamily: MONO, fontSize: 9, color: C.purple, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: 1 }}>✦ AI Summary</p>
@@ -166,8 +222,18 @@ function InboxItem({ item, onAddTask, onAddTaskAndSeen, onMarkSeen }) {
   )
 }
 
+// ── SORTABLE WRAPPER ───────────────────────────────────
+function SortableInboxItem(props) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: itemKey(props.item) })
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }}>
+      <InboxItem {...props} dragHandleProps={{ ...attributes, ...listeners }} isDragging={isDragging} />
+    </div>
+  )
+}
+
 // ── MAIN ───────────────────────────────────────────────
-export default function Inbox() {
+export default function Inbox({ onMenuClick }) {
   const [sourceFilter, setSourceFilter] = useState('all')
   const [bucketFilter, setBucketFilter] = useState('all')
   const [sortBy,       setSortBy]       = useState('date')
@@ -177,6 +243,11 @@ export default function Inbox() {
   const [toast,        setToast]        = useState(null)
   const qc       = useQueryClient()
   const isMobile = window.innerWidth < 768
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   // Cache-first: load from localStorage immediately, never auto-refetch
   const cachedEntry = useMemo(() => readCache(), [])
@@ -195,11 +266,18 @@ export default function Inbox() {
     retry: 1,
   })
 
+  const { data: overrides = { order: [], buckets: {} } } = useQuery({
+    queryKey: ['inbox-overrides'],
+    queryFn: fetchInboxOverrides,
+    staleTime: 30_000,
+  })
+
   const fetchedAt = cachedEntry?.fetched_at || (dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : null)
 
-  // Seen helpers
+  // Seen helpers — toast on mark so user knows it worked
   const markSeen = useCallback((id) => {
     setSeenIds(prev => { const next = new Set(prev); next.add(id); saveSeen(next); return next })
+    setToast('Moved to Actioned — tap ↩ Restore to undo')
   }, [])
   const unmarkSeen = useCallback((id) => {
     setSeenIds(prev => { const next = new Set(prev); next.delete(id); saveSeen(next); return next })
@@ -217,11 +295,35 @@ export default function Inbox() {
     markSeen(item.id)
   }, [addTask, markSeen])
 
+  const relabel = useMutation({
+    mutationFn: ({ key, bucket }) => patchInboxOverrides({ buckets: { [key]: bucket } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['inbox-overrides'] }),
+    onError:   e => setToast(`Relabel failed: ${e.message}`),
+  })
+
+  const reorderInbox = useMutation({
+    mutationFn: orderedKeys => patchInboxOverrides({ order: orderedKeys }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['inbox-overrides'] }),
+    onError:   e => setToast(`Reorder failed: ${e.message}`),
+  })
+
+  // Apply bucket overrides on top of raw items
+  const itemsWithOverrides = useMemo(() =>
+    items.map(item => ({ ...item, bucket: overrides.buckets[itemKey(item)] ?? item.bucket })),
+    [items, overrides]
+  )
+
+  const orderMap = useMemo(() => {
+    const m = {}
+    overrides.order.forEach((key, i) => { m[key] = i })
+    return m
+  }, [overrides.order])
+
   // Split active / actioned
   const { active, actioned } = useMemo(() => ({
-    active:   items.filter(i => !seenIds.has(i.id)),
-    actioned: items.filter(i =>  seenIds.has(i.id)),
-  }), [items, seenIds])
+    active:   itemsWithOverrides.filter(i => !seenIds.has(i.id)),
+    actioned: itemsWithOverrides.filter(i =>  seenIds.has(i.id)),
+  }), [itemsWithOverrides, seenIds])
 
   // Filter + sort
   const filtered = useMemo(() => {
@@ -236,8 +338,31 @@ export default function Inbox() {
         return bo !== 0 ? bo : (new Date(b.received_at) - new Date(a.received_at)) * m
       })
     }
-    return [...list].sort((a, b) => (new Date(b.received_at) - new Date(a.received_at)) * m)
-  }, [active, sourceFilter, bucketFilter, sortBy, sortDir])
+    // Date sort — respect custom order overrides
+    return [...list].sort((a, b) => {
+      const aIdx = orderMap[itemKey(a)] ?? Infinity
+      const bIdx = orderMap[itemKey(b)] ?? Infinity
+      if (aIdx !== Infinity || bIdx !== Infinity) return aIdx - bIdx
+      return (new Date(b.received_at) - new Date(a.received_at)) * m
+    })
+  }, [active, sourceFilter, bucketFilter, sortBy, sortDir, orderMap])
+
+  const handleDragEnd = ({ active: dragActive, over }) => {
+    if (!over || dragActive.id === over.id) return
+    // Reorder within the unfiltered active list to preserve positions of non-visible items
+    const globalSorted = [...itemsWithOverrides.filter(i => !seenIds.has(i.id))].sort((a, b) => {
+      const aIdx = orderMap[itemKey(a)] ?? Infinity
+      const bIdx = orderMap[itemKey(b)] ?? Infinity
+      if (aIdx !== Infinity || bIdx !== Infinity) return aIdx - bIdx
+      return new Date(b.received_at) - new Date(a.received_at)
+    })
+    const ids = globalSorted.map(itemKey)
+    const fromPos = ids.indexOf(dragActive.id)
+    const toPos   = ids.indexOf(over.id)
+    if (fromPos !== -1 && toPos !== -1) {
+      reorderInbox.mutate(arrayMove(ids, fromPos, toPos))
+    }
+  }
 
   const actionCount  = active.filter(i => i.bucket === 'needs_action').length
   const vipCount     = active.filter(i => i.is_vip).length
@@ -250,12 +375,12 @@ export default function Inbox() {
 
   // Sort button with direction toggle
   const SortBtn = ({ by, label }) => {
-    const active = sortBy === by
-    const dir    = active ? sortDir : 'desc'
+    const isActive = sortBy === by
+    const dir      = isActive ? sortDir : 'desc'
     return (
-      <button onClick={() => { active ? setSortDir(d => d==='desc'?'asc':'desc') : (setSortBy(by), setSortDir('desc')) }}
-        style={{ padding: '8px 12px', border: 'none', background: active ? C.blue+'22' : 'transparent', cursor: 'pointer', fontFamily: MONO, fontSize: 10, whiteSpace: 'nowrap', color: active ? C.blue : C.muted, borderBottom: `2px solid ${active ? C.blue : 'transparent'}`, transition: 'all 0.12s', display: 'flex', alignItems: 'center', gap: 3 }}>
-        {label} <span style={{ fontSize: 10 }}>{active ? (dir==='desc' ? '↓' : '↑') : '↕'}</span>
+      <button onClick={() => { isActive ? setSortDir(d => d==='desc'?'asc':'desc') : (setSortBy(by), setSortDir('desc')) }}
+        style={{ padding: '8px 12px', border: 'none', background: isActive ? C.blue+'22' : 'transparent', cursor: 'pointer', fontFamily: MONO, fontSize: 10, whiteSpace: 'nowrap', color: isActive ? C.blue : C.muted, borderBottom: `2px solid ${isActive ? C.blue : 'transparent'}`, transition: 'all 0.12s', display: 'flex', alignItems: 'center', gap: 3 }}>
+        {label} <span style={{ fontSize: 10 }}>{isActive ? (dir==='desc' ? '↓' : '↑') : '↕'}</span>
       </button>
     )
   }
@@ -268,7 +393,7 @@ export default function Inbox() {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-      <Topbar title="Inbox" subtitle={`${actionCount} action · ${vipCount} VIP · ${active.length} active`}>
+      <Topbar title="Inbox" subtitle={`${actionCount} action · ${vipCount} VIP · ${active.length} active`} onMenuClick={onMenuClick}>
         <span style={{ fontFamily: MONO, fontSize: 9, color: C.muted, display: isMobile ? 'none' : 'block' }}>
           {cacheAgeLabel(fetchedAt)}
         </span>
@@ -321,28 +446,55 @@ export default function Inbox() {
               {bucketFilter!=='all' ? ` · ${bucketFilter.replace('_',' ')}` : ''}
               {sourceFilter!=='all' ? ` · ${sourceFilter}` : ''}
               {' '}· {sortBy} {sortDir==='desc'?'↓':'↑'}
+              {sortBy === 'date' && <span style={{ color: C.border2 }}> · drag ⠿ to reorder</span>}
             </p>
-            {filtered.map(item => (
-              <InboxItem key={`${item.source}-${item.id}`} item={item}
-                onAddTask={(item, text) => addTask.mutate({ item, text })}
-                onAddTaskAndSeen={addTaskAndSeen}
-                onMarkSeen={markSeen} />
-            ))}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={filtered.map(itemKey)} strategy={verticalListSortingStrategy}>
+                {filtered.map(item => (
+                  <SortableInboxItem
+                    key={itemKey(item)}
+                    item={item}
+                    onAddTask={(item, text) => addTask.mutate({ item, text })}
+                    onAddTaskAndSeen={addTaskAndSeen}
+                    onMarkSeen={markSeen}
+                    onRelabel={bucket => relabel.mutate({ key: itemKey(item), bucket })}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           </>
         )}
 
         {/* Actioned section */}
         {actioned.length > 0 && (
           <div style={{ marginTop:16 }}>
-            <button onClick={() => setShowActioned(s => !s)} style={{
-              width:'100%', padding:'10px 14px', background:C.surface,
-              border:`1px solid ${C.border}`, borderRadius:10,
-              display:'flex', alignItems:'center', justifyContent:'space-between',
-              cursor:'pointer', fontFamily:MONO, fontSize:10, color:C.muted,
-            }}>
-              <span>👁 Actioned — {actioned.length} item{actioned.length!==1?'s':''}</span>
-              <span style={{ fontSize:11 }}>{showActioned?'▲':'▼'}</span>
-            </button>
+            {/* Actioned header — toggle + clear all */}
+            <div style={{ display:'flex', gap:8, alignItems:'stretch' }}>
+              <button onClick={() => setShowActioned(s => !s)} style={{
+                flex:1, padding:'10px 14px', background:C.surface,
+                border:`1px solid ${C.border}`, borderRadius:10,
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                cursor:'pointer', fontFamily:MONO, fontSize:10, color:C.muted,
+              }}>
+                <span>👁 Actioned — {actioned.length} item{actioned.length!==1?'s':''} · tap to expand</span>
+                <span style={{ fontSize:11 }}>{showActioned?'▲':'▼'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setSeenIds(new Set())
+                  saveSeen(new Set())
+                  setToast(`Moved ${actioned.length} item${actioned.length!==1?'s':''} back to inbox`)
+                }}
+                title="Move everything back to inbox"
+                style={{
+                  padding:'10px 14px', background:'rgba(239,68,68,0.08)',
+                  border:`1px solid rgba(239,68,68,0.25)`, borderRadius:10,
+                  cursor:'pointer', fontFamily:MONO, fontSize:10, color:C.red,
+                  whiteSpace:'nowrap',
+                }}
+              >↩ Restore all</button>
+            </div>
+
             {showActioned && (
               <div style={{ marginTop:8 }}>
                 {actioned.map(item => {
@@ -350,7 +502,7 @@ export default function Inbox() {
                   return (
                     <div key={`seen-${item.source}-${item.id}`} style={{
                       background:C.surface, border:`1px solid ${C.border}`, borderRadius:8,
-                      padding:'9px 14px', marginBottom:5, opacity:0.5,
+                      padding:'10px 14px', marginBottom:5, opacity:0.55,
                       display:'flex', alignItems:'center', gap:10,
                     }}>
                       <span style={{ fontFamily:MONO, fontSize:9, color:s.color, background:s.bg, padding:'1px 6px', borderRadius:4, flexShrink:0 }}>{s.label}</span>
@@ -360,9 +512,20 @@ export default function Inbox() {
                         </p>
                       </div>
                       <span style={{ fontFamily:MONO, fontSize:9, color:C.muted, flexShrink:0 }}>{timeLabel(item.received_at)}</span>
-                      <button onClick={() => unmarkSeen(item.id)} title="Move back to inbox"
-                        style={{ fontFamily:MONO, fontSize:9, padding:'2px 7px', borderRadius:4, border:`1px solid ${C.border}`, background:'transparent', color:C.muted, cursor:'pointer', flexShrink:0 }}>
-                        ↩
+                      {/* Restore button — large enough to tap */}
+                      <button
+                        onClick={() => { unmarkSeen(item.id); setToast('Moved back to inbox') }}
+                        title="Move back to inbox"
+                        style={{
+                          minWidth:44, minHeight:32,
+                          fontFamily:SANS, fontSize:11, fontWeight:600,
+                          padding:'4px 10px', borderRadius:6,
+                          border:`1px solid rgba(79,142,247,0.3)`,
+                          background:'rgba(79,142,247,0.08)', color:C.blue,
+                          cursor:'pointer', flexShrink:0,
+                          display:'flex', alignItems:'center', gap:4,
+                        }}>
+                        ↩ <span style={{ fontFamily:MONO, fontSize:9 }}>Restore</span>
                       </button>
                     </div>
                   )
