@@ -9,7 +9,7 @@ import Topbar from '../components/Topbar'
 
 // ── CACHE & SEEN (localStorage) ────────────────────────
 const CACHE_KEY = 'inbox_cache_v3'   // bumped — removes fabricated Slack data from cache
-const SEEN_KEY  = 'inbox_seen_v2'   // bumped — resets all accidentally-marked items
+const SEEN_KEY  = 'inbox_seen_v3'   // bumped — restores all accidentally-seen items
 
 function readCache()  { try { const r = localStorage.getItem(CACHE_KEY); return r ? JSON.parse(r) : null } catch { return null } }
 function writeCache(data) { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, fetched_at: new Date().toISOString() })) } catch {} }
