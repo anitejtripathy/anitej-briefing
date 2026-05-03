@@ -66,7 +66,7 @@ export default function Sidebar({ open, onClose }) {
         <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid #1C1F2E' }}>
           <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 800, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4F8EF7', animation: 'pulse 2s ease-in-out infinite', display: 'inline-block' }} />
-            Anitej Briefing
+            Anitej Workspace
           </div>
           <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: '#3D4152', marginTop: 2 }}>
             PM · Razorpay

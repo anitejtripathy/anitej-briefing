@@ -16,7 +16,8 @@ export async function readJson(relativePath) {
   if (res.status === 404) return { data: [], sha: null }
   if (!res.ok) throw new Error(`GitHub API error: ${res.status} on ${relativePath}`)
   const json = await res.json()
-  const data = JSON.parse(atob(json.content.replace(/\n/g, '')))
+  const bytes = Uint8Array.from(atob(json.content.replace(/\n/g, '')), c => c.charCodeAt(0))
+  const data  = JSON.parse(new TextDecoder('utf-8').decode(bytes))
   return { data, sha: json.sha }
 }
 
@@ -129,7 +130,8 @@ export async function fetchBrief(dateStr = null) {
   if (res.status === 404) return { markdown: null, date: d }
   if (!res.ok) throw new Error(`Brief fetch error: ${res.status}`)
   const json     = await res.json()
-  const markdown = atob(json.content.replace(/\n/g, ''))
+  const bytes    = Uint8Array.from(atob(json.content.replace(/\n/g, '')), c => c.charCodeAt(0))
+  const markdown = new TextDecoder('utf-8').decode(bytes)
   return { markdown, date: d }
 }
 
