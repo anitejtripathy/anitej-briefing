@@ -1,0 +1,8 @@
+cron/sources/gmail.py
+  c838234a-4336-4c68-96a7-099880da9db7:2026-05-04T04:38:49.327Z 85,87-90
+frontend/src/lib/github.js
+  c838234a-4336-4c68-96a7-099880da9db7:2026-05-04T04:39:09.694Z 116-120,123-127,193-198,200-210
+frontend/src/pages/Inbox.jsx
+  c838234a-4336-4c68-96a7-099880da9db7:2026-05-04T04:39:20.267Z 11
+---
+{"schema_version": "authorship/3.0.0", "base_commit_sha": "HEAD~1", "prompts": {"c838234a-4336-4c68-96a7-099880da9db7:2026-05-04T04:38:49.327Z": {"agent_id": {"tool": "claude_code", "model": ""}, "human_author": "anitej.tripathy@razorpay.com", "accepted_lines": 5, "overriden_lines": 0}, "c838234a-4336-4c68-96a7-099880da9db7:2026-05-04T04:39:09.694Z": {"agent_id": {"tool": "claude_code", "model": ""}, "human_author": "anitej.tripathy@razorpay.com", "accepted_lines": 27, "overriden_lines": 0}, "c838234a-4336-4c68-96a7-099880da9db7:2026-05-04T04:39:20.267Z": {"agent_id": {"tool": "claude_code", "model": ""}, "human_author": "anitej.tripathy@razorpay.com", "accepted_lines": 1, "overriden_lines": 0}}}
