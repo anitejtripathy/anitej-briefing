@@ -113,8 +113,18 @@ export async function fetchInbox(days = 3) {
     )
   }
 
+  // Filter out noise/unclassified AND items whose received_at is older than the fetch window.
+  // This handles Gmail threads that started months ago but had a reply in the window period —
+  // the cron now uses last-message date, but existing data may still have old dates.
+  const cutoff = new Date(today)
+  cutoff.setDate(cutoff.getDate() - days)
+
   return results
-    .filter(item => item.bucket !== 'noise' && item.bucket !== 'unclassified')
+    .filter(item => {
+      if (item.bucket === 'noise' || item.bucket === 'unclassified') return false
+      if (!item.received_at) return true
+      return new Date(item.received_at) >= cutoff
+    })
     .sort((a, b) => new Date(b.received_at) - new Date(a.received_at))
 }
 
@@ -178,4 +188,23 @@ export async function writeLastSync(sources = [], items_found = 0) {
   }
   await writeJson('meta/last_sync.json', payload, 'chore(meta): update last_sync timestamp')
   return payload
+}
+
+// Fetch inbox overrides (custom order + bucket label overrides)
+export async function fetchInboxOverrides() {
+  const { data: raw } = await readJson('inbox/overrides.json')
+  const data = Array.isArray(raw) ? {} : (raw || {})
+  return { order: [], buckets: {}, ...data }
+}
+
+// Patch inbox overrides — pass { order: [...] } and/or { buckets: { key: bucket } }
+export async function patchInboxOverrides(patch) {
+  const { data: raw } = await readJson('inbox/overrides.json')
+  const current = Array.isArray(raw) ? {} : (raw || {})
+  const merged = {
+    order: patch.order !== undefined ? patch.order : (current.order ?? []),
+    buckets: { ...(current.buckets ?? {}), ...(patch.buckets ?? {}) },
+  }
+  await writeJson('inbox/overrides.json', merged, 'chore(inbox): update overrides')
+  return merged
 }

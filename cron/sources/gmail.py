@@ -82,7 +82,12 @@ class GmailClient:
                 if not messages:
                     continue
                 first = messages[0]
+                last  = messages[-1]   # use last message for date — thread may have started months ago
                 headers = parse_email_headers(first.get("payload", {}).get("headers", []))
+                # Override raw_date with last message's date so received_at reflects recent activity
+                last_headers = parse_email_headers(last.get("payload", {}).get("headers", []))
+                if last_headers.get("raw_date"):
+                    headers["raw_date"] = last_headers["raw_date"]
                 threads.append({
                     "id": t["id"],
                     "source": "email",

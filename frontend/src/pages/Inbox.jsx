@@ -8,7 +8,7 @@ import { fetchInbox, fetchInboxOverrides, patchInboxOverrides, createTaskFromInb
 import Topbar from '../components/Topbar'
 
 // ── CACHE & SEEN (localStorage) ────────────────────────
-const CACHE_KEY = 'inbox_cache_v3'   // bumped — removes fabricated Slack data from cache
+const CACHE_KEY = 'inbox_cache_v4'   // bumped — removes old-thread emails outside date window
 const SEEN_KEY  = 'inbox_seen_v3'   // bumped — restores all accidentally-seen items
 
 function readCache()  { try { const r = localStorage.getItem(CACHE_KEY); return r ? JSON.parse(r) : null } catch { return null } }
